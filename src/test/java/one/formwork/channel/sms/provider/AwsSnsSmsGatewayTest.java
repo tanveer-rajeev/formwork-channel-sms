@@ -68,4 +68,37 @@ class AwsSnsSmsGatewayTest {
         String result = createGateway().encode("*");
         assertEquals("%2A", result);
     }
+
+    @Test
+    void shortGsm7Message_IsOneSegment() {
+        // 17 plain ASCII chars — fits easily in one 160-char GSM-7 segment
+        assertEquals(1, AwsSnsSmsGateway.calculateSegmentCount("Your OTP is 1234"));
+    }
+
+    @Test
+    void exactly160Gsm7Chars_IsOneSegment() {
+        String body = "a".repeat(160);
+        assertEquals(1, AwsSnsSmsGateway.calculateSegmentCount(body));
+    }
+
+    @Test
+    void oneCharOver160Gsm7_IsTwoSegments() {
+        // 161 chars — one char over the single-segment limit, must split
+        String body = "a".repeat(161);
+        assertEquals(2, AwsSnsSmsGateway.calculateSegmentCount(body));
+    }
+
+    @Test
+    void longGsm7Message_UsesConcatenatedLimitOf153() {
+        // 300 chars: 300 / 153 = 1.96 -> needs 2 segments
+        String body = "a".repeat(300);
+        assertEquals(2, AwsSnsSmsGateway.calculateSegmentCount(body));
+    }
+
+    @Test
+    void messageWithEmoji_ForcesUcs2_LowersLimitTo70() {
+        // Any non-GSM-7 character (like an emoji) forces UCS-2 encoding
+        String body = "a".repeat(70) + "\uD83D\uDE00"; // 70 letters + 1 emoji = 71 UCS-2 chars
+        assertEquals(2, AwsSnsSmsGateway.calculateSegmentCount(body));
+    }
 }
