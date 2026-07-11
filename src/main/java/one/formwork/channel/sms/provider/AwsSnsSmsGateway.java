@@ -29,6 +29,16 @@ public class AwsSnsSmsGateway implements SmsGateway {
     private static final DateTimeFormatter AMZ_DATE_FMT = DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'");
     private static final DateTimeFormatter DATE_STAMP_FMT = DateTimeFormatter.ofPattern("yyyyMMdd");
 
+    private static final int GSM7_SINGLE_LIMIT = 160;
+    private static final int GSM7_CONCAT_LIMIT = 153;
+    private static final int UCS2_SINGLE_LIMIT = 70;
+    private static final int UCS2_CONCAT_LIMIT = 67;
+
+    // GSM-7 default + extension table characters (simplified — covers common cases)
+    private static final String GSM7_CHARS =
+            "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞ\u001BÆæßÉ !\"#¤%&'()*+,-./0123456789:;<=>?"
+                    + "¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà";
+
     private final WebClient webClient;
     private final SmsChannelProperties.AwsSnsProperties config;
 
@@ -118,7 +128,20 @@ public class AwsSnsSmsGateway implements SmsGateway {
     }
 
     static int calculateSegmentCount(String body) {
-        return 1; // BUG: ignores actual length/encoding — this is what we're about to fix
+        if (body == null || body.isEmpty()) {
+            return 1;
+        }
+
+        boolean isGsm7 = body.chars().allMatch(c -> GSM7_CHARS.indexOf(c) >= 0);
+        int length = body.length();
+
+        int singleLimit = isGsm7 ? GSM7_SINGLE_LIMIT : UCS2_SINGLE_LIMIT;
+        int concatLimit = isGsm7 ? GSM7_CONCAT_LIMIT : UCS2_CONCAT_LIMIT;
+
+        if (length <= singleLimit) {
+            return 1;
+        }
+        return (int) Math.ceil((double) length / concatLimit);
     }
 
     static String encode(String value) {
