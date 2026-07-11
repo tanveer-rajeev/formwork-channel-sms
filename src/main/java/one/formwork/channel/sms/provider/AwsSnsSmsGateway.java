@@ -117,7 +117,7 @@ public class AwsSnsSmsGateway implements SmsGateway {
         return "AWS_SNS";
     }
 
-    private static String encode(String value) {
+    static String encode(String value) {
         return URLEncoder.encode(value, StandardCharsets.UTF_8);
     }
 
