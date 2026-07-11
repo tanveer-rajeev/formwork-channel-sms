@@ -16,9 +16,11 @@ public abstract class TenantScopedEntity {
 
     @PrePersist
     protected void onCreate() {
-        // Stub: real base class likely pulls tenantId from a
-        // request-scoped/ThreadLocal tenant context automatically.
-        // Left abstract-ish on purpose — subclasses/tests must set it.
+        if (tenantId == null) {
+            throw new IllegalStateException(
+                    "tenantId must be set before persisting a " + getClass().getSimpleName()
+            );
+        }
     }
 
     public UUID getId() { return id; }
