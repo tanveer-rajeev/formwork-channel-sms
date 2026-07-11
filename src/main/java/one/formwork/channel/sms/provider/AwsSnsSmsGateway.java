@@ -118,7 +118,19 @@ public class AwsSnsSmsGateway implements SmsGateway {
     }
 
     static String encode(String value) {
-        return URLEncoder.encode(value, StandardCharsets.UTF_8);
+        StringBuilder sb = new StringBuilder();
+        for (byte b : value.getBytes(StandardCharsets.UTF_8)) {
+            char c = (char) (b & 0xFF);
+            if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')
+                    || (c >= '0' && c <= '9')
+                    || c == '-' || c == '_' || c == '.' || c == '~') {
+                sb.append(c);
+            } else {
+                sb.append('%');
+                sb.append(String.format("%02X", b & 0xFF));
+            }
+        }
+        return sb.toString();
     }
 
     private static String sha256Hex(String data) {
