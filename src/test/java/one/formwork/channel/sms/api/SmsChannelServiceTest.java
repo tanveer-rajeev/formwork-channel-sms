@@ -1,6 +1,8 @@
 package one.formwork.channel.sms.api;
 
 import java.util.UUID;
+
+import one.formwork.channel.sms.cost.SmsCostService;
 import one.formwork.channel.sms.validation.PhoneNumberValidator.InvalidPhoneNumberException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
@@ -29,12 +31,17 @@ class SmsChannelServiceTest {
     @Mock
     private SmsChannelProperties properties;
 
+    @Mock
+    private SmsCostService costService;
+
     private SmsChannelService service;
 
     @BeforeEach
     void setUp() {
-        service = new SmsChannelService(List.of(twilioGateway, vonageGateway), properties);
+        service = new SmsChannelService(List.of(twilioGateway, vonageGateway), properties, costService);
     }
+
+
 
     @Nested
     class SendSms {
