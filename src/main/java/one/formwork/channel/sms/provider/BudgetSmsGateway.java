@@ -3,6 +3,10 @@ package one.formwork.channel.sms.provider;
 import one.formwork.channel.sms.api.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.MediaType;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
+import org.springframework.web.reactive.function.BodyInserters;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 
@@ -22,14 +26,17 @@ public class BudgetSmsGateway implements SmsGateway {
     @Override
     public SmsResult send(SmsMessage message) {
         try {
-            String response = webClient.get()
-                    .uri(BUDGETSMS_API_URL
-                            + "?username={user}&password={pass}&from={from}&to={to}&msg={msg}",
-                            config.getUsername(),
-                            config.getPassword(),
-                            config.getOriginator(),
-                            message.to(),
-                            message.body())
+            MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
+            form.add("username", config.getUsername());
+            form.add("password", config.getPassword());
+            form.add("from", config.getOriginator());
+            form.add("to", message.to());
+            form.add("msg", message.body());
+
+            String response = webClient.post()
+                    .uri(BUDGETSMS_API_URL)
+                    .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                    .body(BodyInserters.fromFormData(form))
                     .retrieve()
                     .bodyToMono(String.class)
                     .block();
