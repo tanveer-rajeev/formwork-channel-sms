@@ -40,7 +40,18 @@ public class SmsChannelProperties {
         public String getFromNumber() { return fromNumber; } public void setFromNumber(String s) { this.fromNumber = s; }
     }
     public static class AwsSnsProperties {
-        private String region = "eu-central-1"; private String senderId;
+        private String region = "eu-central-1";
+        private String senderId;
+        private String endpointOverride; // NEW — for testing only, null in production
+        private String accessKey;        // NEW — falls back to env var if unset
+        private String secretKey;        // NEW — falls back to env var if unset
+
+        public String getEndpointOverride() { return endpointOverride; }
+        public void setEndpointOverride(String e) { this.endpointOverride = e; }
+        public String getAccessKey() { return accessKey != null ? accessKey : System.getenv("AWS_ACCESS_KEY_ID"); }
+        public void setAccessKey(String a) { this.accessKey = a; }
+        public String getSecretKey() { return secretKey != null ? secretKey : System.getenv("AWS_SECRET_ACCESS_KEY"); }
+        public void setSecretKey(String s) { this.secretKey = s; }
         public String getRegion() { return region; } public void setRegion(String s) { this.region = s; }
         public String getSenderId() { return senderId; } public void setSenderId(String s) { this.senderId = s; }
     }
