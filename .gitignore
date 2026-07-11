@@ -1,0 +1,32 @@
+# Project exclude paths
+# Maven
+target/
+!.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+# IntelliJ IDEA
+.idea/
+*.iws
+*.iml
+*.ipr
+out/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Environment / secrets — never commit real credentials
+.env
+*.env.local
+application-local.yml
+application-local.properties
+
+# Compiled class files
+*.class
+
+# JaCoCo / coverage output (generated, not source)
+target/site/jacoco/
