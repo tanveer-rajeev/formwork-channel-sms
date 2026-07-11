@@ -33,6 +33,7 @@ between actual provider spend and what the system reports/charges tenants
 for, invisible until someone manually reconciles against the AWS bill.
 
 **Location:** `AwsSnsSmsGateway.java:100` — `return SmsResult.success(messageId, "AWS_SNS", 1);`
+               `MessageBirdSmsGateway.java:48` — `return SmsResult.success(messageId, "MESSAGEBIRD", 1);`
 
 **What's wrong:** The segment count is a hardcoded literal `1`, independent
 of the actual message body. SMS has a fixed per-segment character limit —
@@ -70,8 +71,9 @@ small, well-tested library constant instead of hand-rolling this.
 
 **Severity:** High — data leak (PII: recipient phone number and message body; plus long-lived provider credentials)
 
-**Location:** `BudgetSmsGateway.java`, `send()` method
-
+**Locations:** `BudgetSmsGateway.java:27`, `"?username={user}&password={pass}&from={from}&to={to}&msg={msg}",` 
+               `TwilioSmsGateway.java:56`, `log.info("Twilio SMS sent: sid={}, to={}", sid, message.to());`
+               `AwsSnsSmsGateway.java: 100`, `log.info("AWS SNS SMS sent: messageId={}, to={}", messageId, message.to());`
 ```
 webClient.get()
     .uri(BUDGETSMS_API_URL
@@ -82,6 +84,9 @@ webClient.get()
             message.to(),
             message.body())
 ```
+
+forget to mention earlier I found other classes as well with same issue.
+`VonageSmsGateway`-> line number 55
 
 **Same issue for these classes as well ** `AwsSnsSmsGateway.java`, `send()`:
 ```
@@ -252,7 +257,7 @@ Findings 1 and 2 once those are fixed.
 
 ---
 
-## Finding 6 — Successful result returned even when `MessageId` extraction fails
+## Finding 8 — Successful result returned even when `MessageId` extraction fails
 
 **Severity:** Medium — silent partial failure. No immediate money/data loss,
 but downstream delivery-status reconciliation and idempotency handling lose
@@ -275,3 +280,46 @@ retries, or investigate later.
 **Fix:** Treat a `null` extracted `messageId` after an HTTP 2xx response as a
 distinct failure mode (e.g. `"PARSE_ERROR"`) rather than silently returning
 success, or at minimum log a warning so the gap is visible in monitoring.
+
+
+## Finding 9: Vonage multi-segment response collapsed into a single status — status and segment count both wrong for split messages
+
+**Severity:** Critical — money lost and delivery status misreported. Vonage's
+API returns one array entry per *segment*, not per message, so any
+multi-segment send (message over ~160 GSM-7 / 70 UCS-2 chars) has its true
+per-segment outcome discarded. This is worse than a pure undercount: the code
+can report full success on a send where a later segment actually failed, and
+it also over/under-attributes segment count depending on what's in `messages`.
+
+**Location:** `VonageSmsGateway.java` — inside `send()`, the block:
+
+```
+Map<String, Object> first = messages.getFirst();
+String status = String.valueOf(first.get("status"));
+if ("0".equals(status)) {
+    String messageId = String.valueOf(first.get("message-id"));
+    ...
+    return SmsResult.success(messageId, "VONAGE", messages.size());
+}
+```
+(fill in the exact line number with `grep -n "messages.getFirst()" VonageSmsGateway.java`)
+
+**What's wrong:** Vonage's `/sms/json` response includes one entry in the
+`messages` array per segment of a multi-segment message, each with its own
+`status` and `message-id`. This code reads only `messages.getFirst()` and
+treats that single segment's status as the outcome for the entire send. If
+segment 1 succeeds but segment 2 or 3 fails, the method still returns
+`SmsResult.success(...)`, and reports `messages.size()` as the successful
+count even though not every segment actually delivered. It also discards
+every message-id except the first, so later delivery-receipt correlation for
+the remaining segments is impossible. Unlike a pure undercount, this can
+report success when the true outcome is a partial failure — a correctness
+bug on top of a billing bug.
+
+**Fix:** Iterate all entries in `messages` instead of only the first.
+Aggregate status across segments with explicit, documented semantics for
+partial failure (e.g., treat any failed segment as an overall failure, or
+introduce a partial-success result type the cost pipeline can interpret).
+Return all message-ids so downstream delivery tracking isn't lossy. Only use
+`messages.size()` as the billed segment count once every segment's status
+has actually been checked, not assumed from the first entry.
